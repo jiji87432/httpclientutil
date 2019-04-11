@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.apache.http.Header;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.protocol.HttpContext;
 
 //import com.tgb.ccl.http.exception.HttpProcessException;
@@ -63,7 +64,7 @@ public class HttpConfig {
 	/**
 	 * 传递参数
 	 */
-	private Map<String, Object> map;
+//	private Map<String, Object> map;
 	
 	/**
 	 * 以json格式作为输入参数
@@ -84,6 +85,11 @@ public class HttpConfig {
 	 * 输出编码
 	 */
 	private String outenc;
+	
+	/**
+	 * 设置RequestConfig
+	 */
+	private RequestConfig requestConfig;
 
 	/**
 	 * 解决多线程下载时，strean被close的问题
@@ -94,6 +100,11 @@ public class HttpConfig {
 	 * 解决多线程处理时，url被覆盖问题
 	 */
 	private static final ThreadLocal<String> urls = new ThreadLocal<String>();	
+	
+	/**
+	 * 解决多线程处理时，url被覆盖问题
+	 */
+	private static final ThreadLocal<Map<String,Object>> maps = new ThreadLocal<Map<String,Object>>();	
 	
 	/**
 	 * @param client	HttpClient对象
@@ -167,13 +178,20 @@ public class HttpConfig {
 	 * @return	返回当前对象
 	 */
 	public HttpConfig map(Map<String, Object> map) {
-		synchronized (getClass()) {
-			if(this.map==null || map==null){
-				this.map = map;
-			}else {
-				this.map.putAll(map);;
-			}
+//		synchronized (getClass()) {
+//			if(this.map==null || map==null){
+//				this.map = map;
+//			}else {
+//				this.map.putAll(map);;
+//			}
+//		}
+		Map<String, Object> m = maps.get();
+		if(m==null || m==null || map==null){
+			m = map;
+		}else {
+			m.putAll(map);
 		}
+		maps.set(m);
 		return this;
 	}
 
@@ -183,8 +201,9 @@ public class HttpConfig {
 	 */
 	public HttpConfig json(String json) {
 		this.json = json;
-		map = new HashMap<String, Object>();
-		map.put(Utils.ENTITY_STRING, json);
+		Map<String, Object> map = new HashMap<String, Object>();
+		map.put(Utils.ENTITY_JSON, json);
+		maps.set(map);
 		return this;
 	}
 	
@@ -212,14 +231,23 @@ public class HttpConfig {
 	 * @return	返回当前对象
 	 */
 	public HttpConfig files(String[] filePaths, String inputName, boolean forceRemoveContentTypeChraset) {
-		synchronized (getClass()) {
-			if(this.map==null){
-				this.map= new HashMap<String, Object>();
-			}
+//		synchronized (getClass()) {
+//			if(this.map==null){
+//				this.map= new HashMap<String, Object>();
+//			}
+//		}
+//		map.put(Utils.ENTITY_MULTIPART, filePaths);
+//		map.put(Utils.ENTITY_MULTIPART+".name", inputName);
+//		map.put(Utils.ENTITY_MULTIPART+".rmCharset", forceRemoveContentTypeChraset);
+
+		Map<String, Object> m = maps.get();
+		if(m==null || m==null){
+			m = new HashMap<String, Object>();
 		}
-		map.put(Utils.ENTITY_MULTIPART, filePaths);
-		map.put(Utils.ENTITY_MULTIPART+".name", inputName);
-		map.put(Utils.ENTITY_MULTIPART+".rmCharset", forceRemoveContentTypeChraset);
+		m.put(Utils.ENTITY_MULTIPART, filePaths);
+		m.put(Utils.ENTITY_MULTIPART+".name", inputName);
+		m.put(Utils.ENTITY_MULTIPART+".rmCharset", forceRemoveContentTypeChraset);
+		maps.set(m);
 		return this;
 	}
 	
@@ -262,6 +290,45 @@ public class HttpConfig {
 		return this;
 	}
 	
+	/**
+	 * 设置超时时间
+	 * 
+	 * @param timeout		超市时间，单位-毫秒
+	 * @return	返回当前对象
+	 */
+	public HttpConfig timeout(int timeout){
+		return timeout(timeout, true);
+	}
+	
+	/**
+	 * 设置超时时间以及是否允许网页重定向（自动跳转 302）
+	 * 
+	 * @param timeout		超时时间，单位-毫秒
+	 * @param redirectEnable		自动跳转
+	 * @return	返回当前对象
+	 */
+	public HttpConfig timeout(int timeout,  boolean redirectEnable){
+		// 配置请求的超时设置
+		RequestConfig config = RequestConfig.custom()
+				.setConnectionRequestTimeout(timeout)
+				.setConnectTimeout(timeout)
+				.setSocketTimeout(timeout)
+				.setRedirectsEnabled(redirectEnable)
+				.build();
+		return timeout(config);
+	}
+	
+	/**
+	 * 设置代理、超时时间、允许网页重定向等
+	 * 
+	 * @param requestConfig		超时时间，单位-毫秒
+	 * @return	返回当前对象
+	 */
+	public HttpConfig timeout(RequestConfig requestConfig){
+		this.requestConfig = requestConfig;
+		return this;
+	}
+	
 	public HttpClient client() {
 		return client;
 	}
@@ -290,7 +357,8 @@ public class HttpConfig {
 	}
 
 	public Map<String, Object> map() {
-		return map;
+//		return map;
+		return maps.get();
 	}
 
 	public String json() {
@@ -313,4 +381,7 @@ public class HttpConfig {
 		return outs.get();
 	}
 
+	public RequestConfig requestConfig() {
+		return requestConfig;
+	}
 }
